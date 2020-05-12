@@ -1,0 +1,257 @@
+﻿<!--
+Copyright 2014 Google Inc. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ -->
+<!--
+This sample demonstrates how to build your own Receiver for use with Google
+Cast.
+
+A receiver is typically an HTML5 application with a html, css, and JavaScript
+components.
+
+In this HTML5 page, we include our style sheet, the Receiver SDK, and our player
+JavaScript code.
+
+We Then define two layers within the player:
+
+1. The media layers
+2. The Overlay layers
+The overlay layer holds:
+   a. Logo for startup page
+   b. Media Artwork and information during loading
+   c. controls for Pause / Seek
+-->
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cast Reference Receiver</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="player.css" />
+  <script type="text/javascript" src="//www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
+  <script type="text/javascript" src="player.js"></script>
+  <script type="text/javascript" src="jquery-3.3.1.min.js"></script>
+  <script type="text/javascript" src="analytics.js"></script>
+  	
+    
+  <script type="text/javascript" src="media_player.js"></script>
+
+
+<!--
+  <script type="text/javascript">
+	$.ajax({
+		async: false,
+		type : "GET",
+		url : "http://www.gstatic.com/cast/sdk/libs/mediaplayer/1.0.0/media_player.js",
+		dataType: 'jsonp',
+		success : function(data) {
+			var s = document.createElement("script");
+			s.type = 'text/javascript';
+			s.innerHTML = data.replace("onError(a,b)", "onError(e,b)");
+			document.getElementsByTagName("head")[0].appendChild(s);
+		},
+		error: function (error) {
+			var s = document.createElement("script");
+			s.type = 'text/javascript';
+			s.src = "media_player.js"
+			document.getElementsByTagName("head")[0].appendChild(s);
+		}
+	});
+	</script>
+-->
+
+
+</head>
+<body style="margin: 0">
+    <div id="player" class="player">
+        <div class="media">
+
+            <video id="ccVideo" crossorigin="anonymous">
+            </video>
+
+        </div>
+        <div class="logo"></div>
+        <div class="spinner"></div>
+        <div class="watermark"></div>
+        <div class="gradient"></div>
+        <div class="overlay">
+            <div class="media-info">
+                <div class="media-artwork"></div>
+                <div class="media-text">
+                    <div class="media-title"></div>
+                    <div class="media-subtitle"></div>
+                </div>
+            </div>
+            <div class="preview-mode-info">
+                <div class="preview-mode-artwork"></div>
+                <div class="preview-mode-text">
+	                <div class="preview-mode-timer">
+                        <div class="preview-mode-timer-starts">Up next in&nbsp;</div>
+                        <div class="preview-mode-timer-countdown"></div>
+                        <div class="preview-mode-timer-sec">&nbsp;secs...</div>
+                    </div>
+                    <div class="preview-mode-title"></div>
+                    <div class="preview-mode-subtitle"></div>
+                </div>
+            </div>
+            <div class="controls">
+                <span class="controls-play-pause"></span>
+                <span class="controls-cur-time"></span>
+                <span class="controls-total-time"></span>
+                <div class="controls-progress">
+                    <div class="controls-progress-inner progressBar"></div>
+                    <div class="controls-progress-thumb"></div>
+                </div>
+            </div>
+        </div>
+        <div></div>
+    </div>
+
+
+
+
+    <script>
+
+
+
+        // 接收到資料. modify by jackie
+        // JsonTextSubtitleList 接收來自於APP 傳送過來的字幕清單
+        // JsonTextSubtitleList = '{ "MessageType": "subtitleUpdate","List": [{"Language": "旺4","Name": "n4","Url": "http://220.134.220.142:8888/srt/webvtt04.vtt"},{"Language": "旺5","Name": "n5","Url": "http://220.134.220.142:8888/srt/webvtt05.vtt"},{"Language": "旺6","Name": "n6","Url": "http://220.134.220.142:8888/srt/webvtt06.vtt"},{"Language": "旺7","Name": "n7","Url": "http://220.134.220.142:8888/srt/webvtt07.vtt"},{"Language": "旺8","Name": "n8","Url": "http://220.134.220.142:8888/srt/webvtt08.vtt"}]}'
+        var JsonTextSubtitleList="";
+        var JsonTextSubtitleIndex=0;    // 目前選取之字幕軌道編號 0:不顯示字幕
+        function receiverData(JsonText)
+        {
+            console.log('◣◣◣◣◣receiverData(收到資料JsonText)'+JsonText);
+
+            var jText;
+
+            try
+            {
+                jText=JSON.parse(JsonText);
+            }
+            catch (e)
+            {
+                customMessageBus.send(customMessageBusEventSenderId, '{"MessageType": "error"}');
+                return;
+            }            
+
+
+            // 設定 FridayId
+            //jText = {"MessageType": "SetFridayId",  "FridayId": "1234567890abcdef" }
+            if(jText.MessageType=="SetFridayId")
+            {
+                // 設定 FridayId
+                setFridayId(jText.FridayId);
+            }
+
+
+            //jText = {"MessageType": "subtitle",  "Name": "tw",  "URI": "http://220.134.220.142:8888/srt/webvtt08.vtt",  "Language": "Chinese-tw" }
+            if(jText.MessageType=="subtitle")
+            {
+                // 變更字幕軌道
+                SubtitleChange(jText.Name, jText.URI, jText.Language);
+            }
+
+            if(jText.MessageType=="subtitleSelect")
+            {
+                // 變更字幕軌道
+                // '{"MessageType": "subtitleSelect",  "Index": "1" }'
+                var mjText =JSON.parse(JsonTextSubtitleList);
+                if(jText.Index==0)
+                {
+                    // 關閉字幕
+                    SubtitleChange("","","");
+                }
+                else                
+                {
+                    var v=parseInt(jText.Index)-1;
+                    SubtitleChange(mjText.List[v].Name,mjText.List[v].Url,mjText.List[v].Language);
+                }
+                JsonTextSubtitleIndex = jText.Index;
+            }
+
+            if(jText.MessageType=="subtitleUpdate")
+            {
+                // 儲存字幕軌道資訊
+                // '{ "MessageType": "subtitleUpdate","List": [{"Language": "旺4","Name": "n4","Url": "http://220.134.220.142:8888/srt/webvtt04.vtt"},{"Language": "旺5","Name": "n5","Url": "http://220.134.220.142:8888/srt/webvtt05.vtt"},{"Language": "旺6","Name": "n6","Url": "http://220.134.220.142:8888/srt/webvtt06.vtt"},{"Language": "旺7","Name": "n7","Url": "http://220.134.220.142:8888/srt/webvtt07.vtt"},{"Language": "旺8","Name": "n8","Url": "http://220.134.220.142:8888/srt/webvtt08.vtt"}]}'
+                JsonTextSubtitleList = JsonText;
+            }
+
+            if(jText.MessageType=="subtitleLoading")
+            {
+                // 送出 JsonTextSubtitleList 字幕清單與使用中字幕編號目前.
+                // 若 [JsonTextSubtitleList] 沒有資料時,送出 {"MessageType": "subtitleList","selectID":"-1","List": []}
+                if(JsonTextSubtitleList.length==0)
+                {
+                    customMessageBus.send(customMessageBusEventSenderId, '{"MessageType": "subtitleList","selectID":"-1","List": []}');
+                }
+                else
+                {
+                    var mStr = 'subtitleList","selectID":"NumberID'
+                    mStr=ReplaceAll(JsonTextSubtitleList,"subtitleUpdate",mStr);
+                    mStr=ReplaceAll(mStr,"NumberID",JsonTextSubtitleIndex); // 變更使用中字幕編號
+                    
+                    customMessageBus.send(customMessageBusEventSenderId, mStr);
+                }
+            }
+            
+            // 測試 window.castReceiverManager.setApplicationState(JsonText);
+        };
+        
+        // 範例 SubtitleChange("tw","http://220.134.220.142:8888/srt/webvtt09.vtt","ttww");
+        function SubtitleChange(pName, pURI, pLanguage)
+        {
+            if(pName.length==0 || pName==null)
+            {
+                // disable subtitle
+                document.getElementById("ccVideo").innerHTML = "";
+                //console.log("●●●none");
+            }
+            else
+            {
+                // change subtitle
+                // 外掛字幕異動規則.在<video> 標籤中加入兩組或三組 <track>標籤
+//                var mStr = '<track kind="subtitles" src="pURI" srclang="pLanguage" label="pName" default>';
+//                var mStr2 = '<track kind="subtitles" src="pURI" srclang="pLanguage" label="pName">';
+//                mStr = mStr2 + mStr2 + mStr;
+//                mStr = ReplaceAll(mStr, "pURI",pURI);
+//                mStr = ReplaceAll(mStr, "pLanguage",pLanguage);
+//                mStr = ReplaceAll(mStr, "pName",pName);
+//                document.getElementById("ccVideo").innerHTML = mStr;
+
+                var mStr = '<track kind="subtitles" src="pURI" srclang="pLanguage" label="pName" default>';
+                mStr = ReplaceAll(mStr, "pURI",pURI);
+                mStr = ReplaceAll(mStr, "pLanguage",pLanguage);
+                mStr = ReplaceAll(mStr, "pName",pName);
+                document.getElementById("ccVideo").innerHTML = mStr;
+            }
+        }
+        
+        // 置換全部指定之文字
+        // pString:原始文字
+        // regex:需要被置換之文字
+        // replacement:欲置換之文字
+        //     console.log(ReplaceAll("123123123123123123","3","aaa")); 傳回:"12aaa12aaa12aaa12aaa12aaa12aaa"
+        function ReplaceAll(pString, regex, replacement)
+        {
+            return pString.replace(new RegExp(regex, 'g'), replacement);
+        }
+
+        var playerDiv = document.getElementById('player');
+        new sampleplayer.CastPlayer(playerDiv).start();
+    </script>
+    
+</body>
+</html>
